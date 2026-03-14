@@ -37,7 +37,8 @@ import {
   createUserWithEmailAndPassword,
   User as FirebaseUser 
 } from 'firebase/auth';
-import { auth, googleProvider } from './firebase';
+import { addDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { auth, googleProvider, db } from './firebase';
 
 const services = [
   {
@@ -107,10 +108,18 @@ export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [isMyBookingsModalOpen, setIsMyBookingsModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'gpay' | 'phonepe'>('gpay');
+  const [paymentDone, setPaymentDone] = useState(false);
+  const [selectedService, setSelectedService] = useState('');
+  const [preferredDate, setPreferredDate] = useState('');
+  const [additionalNotes, setAdditionalNotes] = useState('');
+  const [userBookings, setUserBookings] = useState<any[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
   const [featuredVideos, setFeaturedVideos] = useState<any[]>(YOUTUBE_VIDEO_POOL.slice(0, 3).map(v => ({
     ...v,
     thumb: `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`
@@ -216,12 +225,89 @@ export default function App() {
 
   const handleLogout = () => signOut(auth);
 
+  const savePaymentData = async () => {
+    if (!user) {
+      alert('User not authenticated');
+      return;
+    }
+
+    try {
+      const paymentData = {
+        userId: user.uid,
+        userEmail: user.email,
+        userName: user.displayName || 'N/A',
+        service: selectedService,
+        bookingDate: preferredDate,
+        additionalNotes: additionalNotes,
+        amount: 999,
+        currency: 'INR',
+        paymentMethod: paymentMethod === 'gpay' ? 'Google Pay' : 'PhonePe',
+        paymentStatus: 'Completed',
+        transactionDate: new Date().toISOString(),
+        timestamp: new Date()
+      };
+
+      const docRef = await addDoc(collection(db, 'payments'), paymentData);
+      console.log('Payment data saved successfully:', docRef.id);
+      return docRef.id;
+    } catch (error) {
+      console.error('Error saving payment data:', error);
+      alert('Failed to save payment data. Please try again.');
+    }
+  };
+
   const handleBookingClick = () => {
     if (user) {
       setIsBookingModalOpen(true);
     } else {
       setIsLoginModalOpen(true);
     }
+  };
+
+  const fetchUserBookings = async () => {
+    if (!user) return;
+    
+    setLoadingBookings(true);
+    try {
+      const q = query(
+        collection(db, 'payments'),
+        where('userId', '==', user.uid)
+      );
+      const querySnapshot = await getDocs(q);
+      const bookings = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setUserBookings(bookings);
+    } catch (error) {
+      console.error('Error fetching bookings:', error);
+      alert('Failed to fetch bookings. Please try again.');
+    } finally {
+      setLoadingBookings(false);
+    }
+  };
+
+  const checkDuplicateBooking = async (service: string, date: string): Promise<boolean> => {
+    if (!user) return false;
+
+    try {
+      const q = query(
+        collection(db, 'payments'),
+        where('userId', '==', user.uid),
+        where('service', '==', service),
+        where('bookingDate', '==', date)
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.size > 0;
+    } catch (error) {
+      console.error('Error checking duplicate booking:', error);
+      return false;
+    }
+  };
+
+  const handleOpenMyBookings = async () => {
+    setIsMyBookingsModalOpen(true);
+    await fetchUserBookings();
   };
 
   return (
@@ -252,6 +338,12 @@ export default function App() {
             
             {user ? (
               <div className="flex items-center gap-4">
+                <button 
+                  onClick={handleOpenMyBookings}
+                  className={`text-xs font-bold px-4 py-2 rounded-full ${scrolled ? 'bg-blue-100 text-blue-600' : 'bg-white/20 text-white'} hover:scale-105 transition-all`}
+                >
+                  My Bookings
+                </button>
                 <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full border border-white/20">
                   <div className="w-6 h-6 rounded-full bg-spiritual-gold flex items-center justify-center text-[10px] font-bold text-spiritual-ink">
                     {user.photoURL ? <img src={user.photoURL} className="rounded-full" /> : user.email?.[0].toUpperCase()}
@@ -318,13 +410,17 @@ export default function App() {
       <section id="home" className="relative min-h-screen flex items-center pt-20 overflow-hidden bg-black">
         <div className="absolute inset-0 z-0">
           <img 
-            src="/banner.jpg" 
+            src="./banner.jpg" 
             onError={(e) => {
-              (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1528319725582-ddc0b6101511?auto=format&fit=crop&q=80&w=2000";
+              const img = e.target as HTMLImageElement;
+              if (!img.src.includes("unsplash")) {
+                img.src = "https://images.unsplash.com/photo-1528319725582-ddc0b6101511?auto=format&fit=crop&q=80&w=2000";
+              }
             }}
             alt="Maharshi Bhrigu Jyotish Banner" 
             className="w-full h-full object-cover opacity-100"
             referrerPolicy="no-referrer"
+            loading="eager"
           />
           {/* Subtle gradient to ensure text readability on the left while keeping the right side clear */}
           <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/20 to-transparent" />
@@ -818,65 +914,373 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setIsBookingModalOpen(false)}
+              onClick={() => {
+                setIsBookingModalOpen(false);
+                setPaymentDone(false);
+                setPaymentMethod('gpay');
+                setSelectedService('');
+                setPreferredDate('');
+                setAdditionalNotes('');
+              }}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl"
+              className="relative bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto"
             >
-              <div className="spiritual-gradient p-10 text-white flex justify-between items-center">
-                <div>
-                  <h2 className="text-3xl font-serif mb-2">Book a Session</h2>
-                  <p className="text-white/60 text-sm">Choose your preferred time for a spiritual consultation.</p>
+              {!paymentDone ? (
+                <>
+                  <div className="spiritual-gradient p-10 text-white flex justify-between items-center">
+                    <div>
+                      <h2 className="text-3xl font-serif mb-2">Book a Session</h2>
+                      <p className="text-white/60 text-sm">Complete your booking with payment.</p>
+                    </div>
+                    <button onClick={() => {
+                      setIsBookingModalOpen(false);
+                      setPaymentDone(false);
+                    }} className="bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors">
+                      <X className="w-6 h-6" />
+                    </button>
+                  </div>
+                  
+                  <div className="p-10 grid md:grid-cols-2 gap-10">
+                    <div className="space-y-6">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Select Service</label>
+                        <select 
+                          value={selectedService}
+                          onChange={(e) => setSelectedService(e.target.value)}
+                          className="w-full bg-gray-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-spiritual-gold outline-none appearance-none text-sm"
+                        >
+                          <option value="">Choose a service...</option>
+                          {services.map(s => <option key={s.title} value={s.title}>{s.title}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Preferred Date</label>
+                        <div className="relative">
+                          <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                          <input 
+                            type="date" 
+                            value={preferredDate}
+                            onChange={(e) => setPreferredDate(e.target.value)}
+                            className="w-full bg-gray-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-spiritual-gold outline-none text-sm" 
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Additional Notes</label>
+                        <textarea 
+                          rows={3} 
+                          value={additionalNotes}
+                          onChange={(e) => setAdditionalNotes(e.target.value)}
+                          className="w-full bg-gray-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-spiritual-gold outline-none text-sm" 
+                          placeholder="Any specific questions?"
+                        ></textarea>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-spiritual-cream p-8 rounded-3xl border border-gray-100 flex flex-col">
+                      <div className="mb-8">
+                        <h4 className="font-bold mb-6 flex items-center gap-2 text-spiritual-ink">
+                          <Sparkles className="w-5 h-5 text-spiritual-gold" /> Payment Details
+                        </h4>
+                        
+                        {/* Barcode Scanner Image */}
+                        <div className="mb-6 p-4 bg-white rounded-2xl border-2 border-dashed border-spiritual-gold/50 flex items-center justify-center">
+                          <div className="text-center">
+                            <img 
+                              src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=maharshi-bhrigu-99-iNR"
+                              alt="Payment QR Code"
+                              className="w-32 h-32 mx-auto mb-2"
+                            />
+                            <p className="text-xs text-gray-600 font-semibold">Scan to Pay ₹999</p>
+                          </div>
+                        </div>
+
+                        {/* Payment Method Selection */}
+                        <div className="space-y-3 mb-6">
+                          <label className="text-xs font-bold uppercase tracking-widest text-gray-600 block">Select Payment Method</label>
+                          <div className="space-y-2">
+                            <label className="flex items-center gap-3 p-3 bg-white rounded-2xl border-2 border-gray-200 cursor-pointer hover:border-spiritual-gold transition-colors">
+                              <input 
+                                type="radio" 
+                                name="payment" 
+                                value="gpay"
+                                checked={paymentMethod === 'gpay'}
+                                onChange={(e) => setPaymentMethod(e.target.value as 'gpay' | 'phonepe')}
+                                className="w-5 h-5 accent-spiritual-gold cursor-pointer"
+                              />
+                              <div className="flex-1">
+                                <div className="font-bold text-sm text-spiritual-ink">Google Pay</div>
+                                <div className="text-xs text-gray-500">Pay securely via GPay</div>
+                              </div>
+                            </label>
+                            <label className="flex items-center gap-3 p-3 bg-white rounded-2xl border-2 border-gray-200 cursor-pointer hover:border-spiritual-gold transition-colors">
+                              <input 
+                                type="radio" 
+                                name="payment" 
+                                value="phonepe"
+                                checked={paymentMethod === 'phonepe'}
+                                onChange={(e) => setPaymentMethod(e.target.value as 'gpay' | 'phonepe')}
+                                className="w-5 h-5 accent-spiritual-gold cursor-pointer"
+                              />
+                              <div className="flex-1">
+                                <div className="font-bold text-sm text-spiritual-ink">PhonePe</div>
+                                <div className="text-xs text-gray-500">Pay securely via PhonePe</div>
+                              </div>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-4 rounded-2xl border border-gray-200 mb-6">
+                          <div className="flex justify-between mb-3 pb-3 border-b border-gray-100">
+                            <span className="text-gray-600">Session Fee:</span>
+                            <span className="font-bold text-spiritual-ink">₹999</span>
+                          </div>
+                          <div className="flex justify-between font-bold text-lg">
+                            <span className="text-spiritual-ink">Total Amount:</span>
+                            <span className="text-spiritual-gold">₹999 INR</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <button 
+                          onClick={async () => {
+                            if (!selectedService || !preferredDate) {
+                              alert('Please select a service and date before proceeding');
+                              return;
+                            }
+                            
+                            const isDuplicate = await checkDuplicateBooking(selectedService, preferredDate);
+                            if (isDuplicate) {
+                              alert('❌ You have already booked a session for this service on this date. Please check your "My Bookings" or select a different date.');
+                              return;
+                            }
+
+                            await savePaymentData();
+                            setPaymentDone(true);
+                          }}
+                          className="w-full bg-spiritual-maroon text-white py-4 rounded-2xl font-bold hover:bg-opacity-90 transition-all shadow-lg"
+                        >
+                          Proceed to Pay ₹999
+                        </button>
+                        <p className="text-xs text-gray-500 text-center">
+                          By booking, you agree to our terms and conditions
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                // Payment Done Screen
+                <div className="p-10 flex flex-col items-center justify-center min-h-[500px]">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", delay: 0.3 }}
+                    className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6"
+                  >
+                    <motion.div
+                      initial={{ rotate: 0 }}
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, delay: 0.3 }}
+                      className="w-12 h-12 text-green-600"
+                    >
+                      <svg className="w-full h-full" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                      </svg>
+                    </motion.div>
+                  </motion.div>
+
+                  <h2 className="text-3xl font-serif text-spiritual-ink mb-2 text-center">Payment Successful!</h2>
+                  <p className="text-gray-600 text-center mb-8">Your booking has been confirmed</p>
+
+                  <div className="bg-spiritual-cream p-8 rounded-3xl w-full mb-8 border border-gray-200">
+                    <div className="space-y-4 mb-6">
+                      <div className="flex justify-between items-center pb-4 border-b border-gray-200">
+                        <span className="text-gray-600">Service:</span>
+                        <span className="font-bold text-spiritual-ink">{selectedService}</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-4 border-b border-gray-200">
+                        <span className="text-gray-600">Date:</span>
+                        <span className="font-bold text-spiritual-ink">{preferredDate}</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-4 border-b border-gray-200">
+                        <span className="text-gray-600">Payment Method:</span>
+                        <span className="font-bold text-spiritual-ink">{paymentMethod === 'gpay' ? 'Google Pay' : 'PhonePe'}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Amount Paid:</span>
+                        <span className="font-bold text-spiritual-gold text-lg">₹999</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6">
+                      <p className="text-sm text-blue-800 font-semibold">
+                        📞 <strong>Please share your payment details on WhatsApp:</strong>
+                      </p>
+                      <a 
+                        href={`https://wa.me/919158058080?text=I%20have%20completed%20my%20payment%20of%20₹999%20for%20${encodeURIComponent(selectedService)}%20session%20on%20${encodeURIComponent(preferredDate)}%20via%20${paymentMethod === 'gpay' ? 'Google Pay' : 'PhonePe'}.`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 font-bold hover:underline mt-2 block"
+                      >
+                        WhatsApp: +91 9158058080
+                      </a>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 w-full">
+                    <a 
+                      href={`https://wa.me/919158058080?text=I%20have%20completed%20my%20payment%20of%20₹999%20for%20${encodeURIComponent(selectedService)}%20session%20on%20${encodeURIComponent(preferredDate)}%20via%20${paymentMethod === 'gpay' ? 'Google Pay' : 'PhonePe'}.`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 bg-green-500 text-white py-4 rounded-2xl font-bold hover:bg-green-600 transition-all flex items-center justify-center gap-2 shadow-lg"
+                    >
+                      <Phone className="w-5 h-5" /> Share on WhatsApp
+                    </a>
+                    <button 
+                      onClick={() => {
+                        setIsBookingModalOpen(false);
+                        setPaymentDone(false);
+                        setPaymentMethod('gpay');
+                        setSelectedService('');
+                        setPreferredDate('');
+                        setAdditionalNotes('');
+                      }}
+                      className="flex-1 bg-spiritual-maroon text-white py-4 rounded-2xl font-bold hover:bg-opacity-90 transition-all shadow-lg"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
-                <button onClick={() => setIsBookingModalOpen(false)} className="bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors">
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* My Bookings Modal */}
+      <AnimatePresence>
+        {isMyBookingsModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMyBookingsModalOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="spiritual-gradient p-10 text-white flex justify-between items-center sticky top-0">
+                <div>
+                  <h2 className="text-3xl font-serif mb-2">My Bookings</h2>
+                  <p className="text-white/60 text-sm">View all your booked sessions</p>
+                </div>
+                <button onClick={() => setIsMyBookingsModalOpen(false)} className="bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors">
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              
-              <div className="p-10 grid md:grid-cols-2 gap-10">
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Select Service</label>
-                    <select className="w-full bg-gray-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-spiritual-gold outline-none appearance-none text-sm">
-                      {services.map(s => <option key={s.title}>{s.title}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Preferred Date</label>
-                    <div className="relative">
-                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input type="date" className="w-full bg-gray-50 border-none rounded-2xl py-4 pl-12 pr-4 focus:ring-2 focus:ring-spiritual-gold outline-none text-sm" />
+
+              <div className="p-10">
+                {loadingBookings ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin">
+                      <Sparkles className="w-8 h-8 text-spiritual-gold" />
                     </div>
+                    <span className="ml-3 text-gray-600">Loading your bookings...</span>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Additional Notes</label>
-                    <textarea rows={3} className="w-full bg-gray-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-spiritual-gold outline-none text-sm" placeholder="Any specific questions?"></textarea>
+                ) : userBookings.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-spiritual-cream rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Calendar className="w-8 h-8 text-spiritual-gold" />
+                    </div>
+                    <h3 className="text-xl font-bold text-spiritual-ink mb-2">No Bookings Yet</h3>
+                    <p className="text-gray-600 mb-6">You haven't booked any sessions yet.</p>
+                    <button 
+                      onClick={() => {
+                        setIsMyBookingsModalOpen(false);
+                        handleBookingClick();
+                      }}
+                      className="bg-spiritual-maroon text-white px-6 py-3 rounded-full font-bold hover:bg-opacity-90 transition-all"
+                    >
+                      Book First Session
+                    </button>
                   </div>
-                </div>
-                
-                <div className="bg-spiritual-cream p-8 rounded-3xl border border-gray-100 flex flex-col justify-between">
-                  <div>
-                    <h4 className="font-bold mb-4 flex items-center gap-2"><Sparkles className="w-4 h-4 text-spiritual-gold" /> Session Details</h4>
-                    <ul className="space-y-3 text-sm text-gray-600">
-                      <li className="flex justify-between"><span>Duration:</span> <span className="font-bold">45 Minutes</span></li>
-                      <li className="flex justify-between"><span>Mode:</span> <span className="font-bold">Video Call</span></li>
-                      <li className="flex justify-between"><span>Language:</span> <span className="font-bold">Marathi / Hindi</span></li>
-                    </ul>
+                ) : (
+                  <div className="space-y-4">
+                    {userBookings.map((booking, idx) => (
+                      <motion.div
+                        key={booking.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.1 }}
+                        className="bg-gradient-to-r from-spiritual-cream to-white p-6 rounded-2xl border-2 border-spiritual-gold/30 hover:border-spiritual-gold transition-all shadow-sm"
+                      >
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h3 className="text-xl font-bold text-spiritual-ink mb-1">{booking.service}</h3>
+                            <p className="text-sm text-gray-600">
+                              <strong>Date:</strong> {new Date(booking.bookingDate).toLocaleDateString('en-IN')}
+                            </p>
+                          </div>
+                          <div className="bg-green-100 text-green-700 px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2">
+                            <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                            {booking.paymentStatus}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 text-sm text-gray-600 mb-4">
+                          <div className="flex justify-between">
+                            <span>Payment Method:</span>
+                            <span className="font-semibold text-spiritual-ink">{booking.paymentMethod}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Amount Paid:</span>
+                            <span className="font-semibold text-spiritual-gold">₹{booking.amount}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Booked On:</span>
+                            <span className="font-semibold text-spiritual-ink">
+                              {new Date(booking.transactionDate).toLocaleDateString('en-IN')}
+                            </span>
+                          </div>
+                          {booking.additionalNotes && (
+                            <div className="flex justify-between">
+                              <span>Notes:</span>
+                              <span className="font-semibold text-spiritual-ink italic">{booking.additionalNotes}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-200 flex gap-3">
+                          <a 
+                            href={`https://wa.me/919158058080?text=Hi, I have a query about my booking for ${encodeURIComponent(booking.service)} on ${encodeURIComponent(booking.bookingDate)}.`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 bg-green-500 text-white py-2 rounded-lg text-sm font-bold hover:bg-green-600 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Phone className="w-4 h-4" /> Contact Support
+                          </a>
+                          <button 
+                            className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-bold hover:bg-gray-300 transition-all"
+                          >
+                            Reschedule
+                          </button>
+                        </div>
+                      </motion.div>
+                    ))}
                   </div>
-                  <button 
-                    onClick={() => {
-                      alert('Booking successful! We will contact you shortly.');
-                      setIsBookingModalOpen(false);
-                    }}
-                    className="w-full bg-spiritual-maroon text-white py-4 rounded-2xl font-bold hover:bg-opacity-90 transition-all shadow-lg mt-8"
-                  >
-                    Confirm Booking
-                  </button>
-                </div>
+                )}
               </div>
             </motion.div>
           </div>
