@@ -47,10 +47,10 @@ const services = [
     icon: <Sun className="w-8 h-8 text-spiritual-gold" />,
   },
   {
-    title: "Bhrigu Jyotish",
-    titleMr: "बृह्गु ज्योतिष",
-    description: "Ancient Bhrigu Samhita techniques for deep karmic insights.",
-    icon: <Star className="w-8 h-8 text-spiritual-gold" />,
+    title: "Crystal Healing",
+    titleMr: "क्रिस्टल हीलिंग",
+    description: "Using sacred crystals to balance energy and promote spiritual well-being.",
+    icon: <Sparkles className="w-8 h-8 text-spiritual-gold" />,
   },
   {
     title: "Kundali Analysis",
@@ -84,6 +84,23 @@ const services = [
   }
 ];
 
+const YOUTUBE_VIDEO_POOL = [
+  { id: 'lOLOpXxEEzQ', title: 'पाडव्याच्या मुहूर्तावरच का कोसळायचं संकट? किरणच्या ३ पूर्वजन्मांची सत्यकथा!' },
+  { id: 'cgwDqI09rhA', title: 'माझ्या रक्तातील तो प्राचीन शाप: ३ जन्म, १ काळा नाग आणि नागपंचमीचं रहस्य!' },
+  { id: 'awRa7Qvsfss', title: 'Fifth House – House of Creativity & Karma | प्रेम, मुलांचे भविष्य नष्ट करते?' },
+  { id: 'k_TTAygZISk', title: 'Fourth House – House of Home & Emotional Foundations' },
+  { id: 'SmbKAaxOqnU', title: 'Third House – Courage | तिसरं स्थान: पराक्रम की पराभव?' },
+  { id: 'Luz1wexGlfA', title: 'Second House Astrology – धनाचा भाव तुमचं आयुष्य उद्ध्वस्त करू शकतो!' },
+  { id: 'VCp4aSybTfA', title: 'Past Life Regression Sessions Videos' },
+  { id: 'aPF7JyBjgpE', title: '५ वर्षांपासून का टिकत नव्हता एकही पैसा? पास्ट लाईफ रिग्रेशन सत्य!' },
+  { id: 'WPuwxA--ke4', title: 'तिचं आयुष्य परिपूर्ण वाटत होतं… पण PLR मध्ये उघडलं धक्कादायक रहस्य!' },
+  { id: 'Tdfey-oA9Kc', title: 'First House – House of Self & Identity | Astrology Basics' },
+  { id: 'EQ_3tKO_2vk', title: 'होळीच्या दिवशी उघडलं पूर्वजन्माचं दार! पेशवेकाळातील धक्कादायक सत्य !!' },
+  { id: 'V7lPaRX2Zqg', title: 'लग्न तुटलं कारण कर्माचं कर्ज बाकी होतं? | ती परत आली होती… अपूर्ण सूड?' }
+];
+
+const POOL_VERSION = '1.3'; // Increment this to force cache refresh
+
 export default function App() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -94,6 +111,10 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [featuredVideos, setFeaturedVideos] = useState<any[]>(YOUTUBE_VIDEO_POOL.slice(0, 3).map(v => ({
+    ...v,
+    thumb: `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`
+  })));
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -103,9 +124,69 @@ export default function App() {
       setUser(currentUser);
     });
 
+    // YouTube Video Randomization Logic
+    const REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes
+    const cacheKey = 'yt_videos_cache';
+    
+    const refreshVideos = () => {
+      try {
+        const shuffled = [...YOUTUBE_VIDEO_POOL].sort(() => 0.5 - Math.random());
+        const selected = shuffled.slice(0, 4).map(v => ({
+          ...v,
+          thumb: `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`
+        }));
+        
+        const cacheData = {
+          videos: selected,
+          timestamp: Date.now(),
+          version: POOL_VERSION
+        };
+        
+        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+        setFeaturedVideos(selected);
+      } catch (e) {
+        console.error('Failed to refresh videos:', e);
+        // Fallback to random without cache
+        const shuffled = [...YOUTUBE_VIDEO_POOL].sort(() => 0.5 - Math.random());
+        setFeaturedVideos(shuffled.slice(0, 4).map(v => ({
+          ...v,
+          thumb: `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`
+        })));
+      }
+    };
+
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const { videos, timestamp, version } = JSON.parse(cached);
+        if (Date.now() - timestamp > REFRESH_INTERVAL || version !== POOL_VERSION) {
+          refreshVideos();
+        } else {
+          setFeaturedVideos(videos);
+        }
+      } else {
+        refreshVideos();
+      }
+    } catch (e) {
+      console.error('Failed to load cached videos:', e);
+      refreshVideos();
+    }
+
+    // Set up interval to check for refresh
+    const interval = setInterval(() => {
+      const currentCached = localStorage.getItem(cacheKey);
+      if (currentCached) {
+        const { timestamp } = JSON.parse(currentCached);
+        if (Date.now() - timestamp > REFRESH_INTERVAL) {
+          refreshVideos();
+        }
+      }
+    }, 60000); // Check every minute
+
     return () => {
       window.removeEventListener('scroll', handleScroll);
       unsubscribe();
+      clearInterval(interval);
     };
   }, []);
 
@@ -304,15 +385,14 @@ export default function App() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              { id: '1', title: 'Understanding Your Karmic Debt', thumb: 'https://images.unsplash.com/photo-1518133910546-b6c2fb7d79e3?auto=format&fit=crop&q=80&w=800' },
-              { id: '2', title: 'Vastu Tips for Prosperity', thumb: 'https://images.unsplash.com/photo-1532983330958-4b32bc9bb07d?auto=format&fit=crop&q=80&w=800' },
-              { id: '3', title: 'The Power of Meditation', thumb: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&q=80&w=800' }
-            ].map((video) => (
-              <motion.div 
+            {featuredVideos.slice(0, 3).map((video) => (
+              <motion.a 
                 key={video.id}
+                href={video.id.length > 1 ? `https://www.youtube.com/watch?v=${video.id}` : '#'}
+                target="_blank"
+                rel="noopener noreferrer"
                 whileHover={{ y: -5 }}
-                className="group cursor-pointer"
+                className="group cursor-pointer block"
               >
                 <div className="relative aspect-video rounded-2xl overflow-hidden mb-4 shadow-lg">
                   <img src={video.thumb} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -323,7 +403,7 @@ export default function App() {
                   </div>
                 </div>
                 <h3 className="text-lg font-bold group-hover:text-spiritual-gold transition-colors">{video.title}</h3>
-              </motion.div>
+              </motion.a>
             ))}
           </div>
         </div>
@@ -338,22 +418,28 @@ export default function App() {
             <p className="text-gray-500">Daily spiritual quotes, polls, and updates from our YouTube community.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[
               { 
-                date: '2 hours ago', 
-                text: 'आजचा सुविचार: तुमचे कर्मच तुमचे भविष्य घडवते. नेहमी सकारात्मक राहा आणि इतरांना मदत करा. 🙏✨',
-                likes: '1.2k',
-                comments: '45'
+                date: '1 day ago', 
+                text: 'गुढीपाडवा म्हणजे आनंदाचा सण! पण काही वेळा याच मुहूर्तावर संकटांची मालिका का सुरू होते? हे कर्माचे चक्र असू शकते. कर्माचा सिद्धांत सांगतो की आपण जे पेरतो तेच उगवते. 🙏✨',
+                likes: '2.4k',
+                comments: '156'
               },
               { 
-                date: 'Yesterday', 
-                text: 'New video coming tomorrow! We will be discussing the impact of Rahu in the 8th house. Stay tuned! 🔔',
-                likes: '850',
-                comments: '12'
+                date: '3 days ago', 
+                text: 'तुमच्या रक्तातील प्राचीन शाप आणि नागपंचमीचे रहस्य! ३ जन्मांपासून चालत आलेला तो काळा नाग... कर्माचा फेरा कधीच चुकत नाही. 🐍🕉️',
+                likes: '1.8k',
+                comments: '89'
+              },
+              { 
+                date: '5 days ago', 
+                text: '५ वर्षांपासून पैसा टिकत नाहीये? पास्ट लाईफ रिग्रेशनमध्ये अनेकदा याचे मूळ कारण दडलेले असते. कर्माचे कर्ज फेडल्याशिवाय आर्थिक प्रगती कठीण असते. 💰🕯️',
+                likes: '3.1k',
+                comments: '245'
               }
             ].map((post, idx) => (
-              <div key={idx} className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+              <div key={idx} className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col h-full">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 spiritual-gradient rounded-full flex items-center justify-center">
                     <Sparkles className="text-white w-5 h-5" />
@@ -363,8 +449,8 @@ export default function App() {
                     <p className="text-[10px] text-gray-400 uppercase tracking-widest">{post.date}</p>
                   </div>
                 </div>
-                <p className="text-gray-700 leading-relaxed mb-6 italic">"{post.text}"</p>
-                <div className="flex items-center gap-6 text-xs text-gray-400 font-bold">
+                <p className="text-gray-700 leading-relaxed mb-6 italic flex-grow">"{post.text}"</p>
+                <div className="flex items-center gap-6 text-xs text-gray-400 font-bold pt-4 border-t border-gray-50">
                   <span className="flex items-center gap-1 hover:text-spiritual-gold cursor-pointer"><Heart className="w-4 h-4" /> {post.likes}</span>
                   <span className="flex items-center gap-1 hover:text-spiritual-gold cursor-pointer"><MessageSquare className="w-4 h-4" /> {post.comments}</span>
                 </div>
@@ -420,10 +506,10 @@ export default function App() {
       <section id="about" className="py-24 bg-spiritual-cream relative overflow-hidden">
         <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-16 items-center">
           <div className="relative">
-            <div className="aspect-[4/5] rounded-3xl overflow-hidden shadow-2xl">
+            <div className="aspect-video rounded-3xl overflow-hidden shadow-2xl">
               <img 
-                src="https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&q=80&w=1000" 
-                alt="Meditation" 
+                src="https://images.unsplash.com/photo-1528319725582-ddc096101511?auto=format&fit=crop&q=80&w=1200" 
+                alt="Spiritual Sciences" 
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
               />
@@ -441,10 +527,10 @@ export default function App() {
             </h2>
             <div className="space-y-6 text-gray-600 leading-relaxed">
               <p>
-                हे चॅनेल समर्पित आहे वैदिक ज्योतिष (Vedic Astrology), बृह्गु ज्योतिष, कुंडली विश्लेषण (Kundali Analysis), वास्तु शास्त्र (Vastu Shastra), ध्यान (Meditation), Spiritual Healing आणि Past Life Regression Therapy या प्राचीन आध्यात्मिक विज्ञानासाठी.
+                हे चॅनेल समर्पित आहे वैदिक ज्योतिष (Vedic Astrology), क्रिस्टल हीलिंग (Crystal Healing), कुंडली विश्लेषण (Kundali Analysis), वास्तु शास्त्र (Vastu Shastra), ध्यान (Meditation), Spiritual Healing आणि Past Life Regression Therapy या प्राचीन आध्यात्मिक विज्ञानासाठी.
               </p>
               <p>
-                आम्ही आधुनिक किंवा मनोवैज्ञानिक ज्योतिष मांडत नाही, तर परंपरागत वैदिक, पराशरी आणि बृह्गु सिद्धांतांवर आधारित शास्त्रीय ज्ञान सादर करतो.
+                आम्ही केवळ आधुनिक किंवा मनोवैज्ञानिक दृष्टिकोन मांडत नाही, तर आम्ही प्राचीन वैदिक, पराशरी ज्योतिष, नाडी ज्योतिष आणि क्रिस्टल हीलिंग यांसारख्या विविध शास्त्रशुद्ध पद्धतींचा अचूक संगम करून तुमच्यासमोर संपूर्ण शास्त्रीय ज्ञान सादर करतो.
               </p>
               <div className="grid grid-cols-2 gap-6 pt-6">
                 <div>
@@ -486,13 +572,30 @@ export default function App() {
                 </a>
               </div>
               <div className="w-full md:w-1/3 aspect-video bg-white/5 rounded-3xl border border-white/10 flex items-center justify-center group cursor-pointer overflow-hidden relative">
-                <img 
-                  src="https://images.unsplash.com/photo-1518133910546-b6c2fb7d79e3?auto=format&fit=crop&q=80&w=800" 
-                  alt="Video Thumbnail" 
-                  className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:scale-110 transition-transform duration-700"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-2xl relative z-10 group-hover:scale-110 transition-transform">
+                {featuredVideos[3] && (
+                  <a 
+                    href={`https://www.youtube.com/watch?v=${featuredVideos[3].id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="absolute inset-0 w-full h-full"
+                  >
+                    <img 
+                      src={featuredVideos[3].thumb} 
+                      alt={featuredVideos[3].title} 
+                      className="w-full h-full object-cover opacity-40 group-hover:scale-110 transition-transform duration-700"
+                      referrerPolicy="no-referrer"
+                    />
+                  </a>
+                )}
+                {!featuredVideos[3] && (
+                  <img 
+                    src="https://images.unsplash.com/photo-1518133910546-b6c2fb7d79e3?auto=format&fit=crop&q=80&w=800" 
+                    alt="Video Thumbnail" 
+                    className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:scale-110 transition-transform duration-700"
+                    referrerPolicy="no-referrer"
+                  />
+                )}
+                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-2xl relative z-10 group-hover:scale-110 transition-transform pointer-events-none">
                   <Youtube className="w-10 h-10 text-red-600" />
                 </div>
               </div>
