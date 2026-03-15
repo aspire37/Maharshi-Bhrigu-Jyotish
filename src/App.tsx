@@ -2,7 +2,6 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-
 import React, { useState, useEffect } from 'react';
 import { 
   Compass, 
@@ -39,6 +38,7 @@ import {
 } from 'firebase/auth';
 import { addDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { auth, googleProvider, db } from './firebase';
+import FAQComponent from './components/FAQ';
 
 const services = [
   {
@@ -699,6 +699,9 @@ export default function App() {
           </div>
         </div>
       </section>
+
+      {/* FAQ Section */}
+      <FAQComponent />
 
       {/* Contact Section */}
       <section id="contact" className="py-24 bg-white">
