@@ -1,0 +1,94 @@
+{
+  "nav": {
+    "home": "Home",
+    "services": "Services",
+    "about": "About",
+    "contact": "Contact",
+    "myBookings": "My Bookings",
+    "admin": "Admin"
+  },
+  "hero": {
+    "title": "Maharshi Bhrigu Jyotish",
+    "subtitle": "Exploring the Depths of Vedic Wisdom",
+    "description": "Ancient wisdom for modern life - Vedic astrology, spiritual healing, and life guidance",
+    "bookSession": "Book a Session",
+    "learnMore": "Learn More"
+  },
+  "services": {
+    "title": "Our Sacred Services",
+    "subtitle": "Exploring the depths of Vedic sciences to bring clarity and harmony to your life's journey.",
+    "vedicAstrology": "Vedic Astrology",
+    "crystalHealing": "Crystal Healing",
+    "kundaliAnalysis": "Kundali Analysis",
+    "vastuShastra": "Vastu Shastra",
+    "meditation": "Meditation",
+    "spiritualHealing": "Spiritual Healing",
+    "pastLifeRegression": "Past Life Regression"
+  },
+  "about": {
+    "title": "Dedicated to Ancient Knowledge",
+    "subtitle": "For Modern Living",
+    "description": "With over 20 years of experience in Vedic sciences, we provide authentic guidance based on ancient wisdom."
+  },
+  "contact": {
+    "title": "Get in Touch",
+    "description": "Have questions about your horoscope or Vastu? We are here to guide you through the ancient wisdom of the sages.",
+    "phone": "Phone",
+    "email": "Email",
+    "address": "Address"
+  },
+  "booking": {
+    "title": "Book a Session",
+    "subtitle": "Complete your booking with payment.",
+    "selectService": "Select Service",
+    "preferredDate": "Preferred Date",
+    "additionalNotes": "Additional Notes",
+    "paymentDetails": "Payment Details",
+    "selectPaymentMethod": "Select Payment Method",
+    "googlePay": "Google Pay",
+    "phonePe": "PhonePe",
+    "totalAmount": "Total Amount",
+    "proceedToPay": "Proceed to Pay",
+    "sessionFee": "Session Fee",
+    "scanToPay": "Scan to Pay"
+  },
+  "auth": {
+    "login": "Login",
+    "signup": "Sign Up",
+    "email": "Email",
+    "password": "Password",
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "confirmPassword": "Confirm Password",
+    "forgotPassword": "Forgot Password?",
+    "alreadyHaveAccount": "Already have an account?",
+    "dontHaveAccount": "Don't have an account?",
+    "googleLogin": "Google Login",
+    "signIn": "Sign In",
+    "createAccount": "Create Account",
+    "orContinueWith": "Or continue with"
+  },
+  "errors": {
+    "invalidEmail": "Invalid email address",
+    "passwordTooShort": "Password must be at least 6 characters",
+    "passwordMismatch": "Passwords do not match",
+    "selectService": "Please select a service",
+    "selectDate": "Please select a future date",
+    "duplicateBooking": "You have already booked this service on this date",
+    "loginFailed": "Login failed. Please check your credentials.",
+    "bookingFailed": "Failed to save booking. Please try again.",
+    "networkError": "Network error. Please check your connection."
+  },
+  "success": {
+    "bookingCreated": "Booking confirmed! Please complete your payment.",
+    "paymentSuccess": "Payment successful! Your booking is confirmed."
+  },
+  "buttons": {
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "reschedule": "Reschedule",
+    "close": "Close",
+    "shareOnWhatsApp": "Share on WhatsApp",
+    "joinCommunity": "Join the Community"
+  }
+}
