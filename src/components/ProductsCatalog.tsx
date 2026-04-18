@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ShoppingCart, Star, Heart, X, X as CloseIcon } from 'lucide-react';
 import { FEATURED_PRODUCTS, PRODUCT_CATEGORIES } from '../constants';
 import { Product } from '../types';
+import { normalizeImagePath, handleImageError } from '../utils/imageUtils';
 
 interface ProductCatalogProps {
   onAddToCart?: (product: Product, quantity: number) => void;
@@ -94,8 +95,9 @@ export const ProductsCatalog: React.FC<ProductCatalogProps> = ({ onAddToCart }) 
               {/* Product Image */}
               <div className="relative h-64 overflow-hidden bg-gray-100">
                 <img
-                  src={product.images[0]}
+                  src={normalizeImagePath(product.images?.[0] || '')}
                   alt={product.name}
+                  onError={(e) => handleImageError(e, product.name)}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                 />
                 {product.featured && (
