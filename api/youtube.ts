@@ -13,7 +13,7 @@ interface YouTubeVideo {
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
-): Promise<void> {
+) {
   // Enable CORS
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -64,10 +64,11 @@ export default async function handler(
     const latestVideos = videos.slice(0, 12);
 
     if (latestVideos.length === 0) {
-      return res.status(404).json({
+      res.status(404).json({
         error: "No videos found in channel",
         channelId: CHANNEL_ID,
       });
+      return;
     }
 
     res.status(200).json({

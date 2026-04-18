@@ -66,3 +66,63 @@ export interface Booking {
   amount: number;
   createdAt: string;
 }
+
+export interface Product {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category: 'gemstones' | 'books' | 'spiritual-items' | 'merchandise' | 'gift-sets';
+  images: string[];
+  stock: number;
+  sku: string;
+  weight?: string;
+  dimensions?: string;
+  benefits?: string[];
+  createdAt?: string;
+  featured?: boolean;
+}
+
+export interface PromoCode {
+  id: string;
+  code: string;
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  validUntil: string;
+  usageLimit: number;
+  usedCount: number;
+  active: boolean;
+  applicableServices?: string[];
+  applicableProducts?: string[];
+  minOrderAmount?: number;
+  createdAt?: string;
+}
+
+export interface CartItem {
+  productId: string;
+  quantity: number;
+  price: number;
+  product?: Product;
+}
+
+export interface Cart {
+  id: string;
+  userId: string;
+  items: CartItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Order {
+  id: string;
+  userId: string;
+  items: CartItem[];
+  totalAmount: number;
+  status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+  shippingAddress?: string;
+  paymentStatus: 'pending' | 'completed' | 'failed';
+  appliedPromoCode?: string;
+  discount?: number;
+  createdAt: string;
+  updatedAt: string;
+}

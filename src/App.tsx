@@ -39,6 +39,9 @@ import {
 import { addDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
 import { auth, googleProvider, db } from './firebase';
 import FAQComponent from './components/FAQ';
+import { ProductsCatalog } from './components/ProductsCatalog';
+import { ServicePricingDisplay } from './components/ServicePricingDisplay';
+import { PromoCodeWidget } from './components/PromoCodeWidget';
 
 const services = [
   {
@@ -120,6 +123,18 @@ export default function App() {
   const [additionalNotes, setAdditionalNotes] = useState('');
   const [userBookings, setUserBookings] = useState<any[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
+  
+  // Contact Form State
+  const [contactForm, setContactForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    service: 'Vedic Astrology',
+    message: '',
+  });
+  const [contactLoading, setContactLoading] = useState(false);
+  const [contactError, setContactError] = useState('');
+  const [contactSuccess, setContactSuccess] = useState(false);
   const [featuredVideos, setFeaturedVideos] = useState<any[]>(YOUTUBE_VIDEO_POOL.slice(0, 3).map(v => ({
     ...v,
     thumb: `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`
@@ -264,6 +279,90 @@ export default function App() {
     }
   };
 
+  const handleContactFormChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => {
+    const { name, value } = e.target;
+    setContactForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+    setContactError('');
+  };
+
+  const handleContactSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setContactError('');
+    setContactSuccess(false);
+
+    // Validation
+    if (!contactForm.name.trim() || contactForm.name.trim().length < 2) {
+      setContactError('Please enter a valid name');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(contactForm.email)) {
+      setContactError('Please enter a valid email address');
+      return;
+    }
+
+    const phoneRegex = /^[0-9]{10}$/;
+    if (!phoneRegex.test(contactForm.phone.replace(/\D/g, ''))) {
+      setContactError('Please enter a valid 10-digit phone number');
+      return;
+    }
+
+    if (!contactForm.service) {
+      setContactError('Please select a service');
+      return;
+    }
+
+    if (contactForm.message.trim().length < 10) {
+      setContactError('Message must be at least 10 characters');
+      return;
+    }
+
+    try {
+      setContactLoading(true);
+
+      const response = await fetch('/api/mail/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(contactForm),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setContactError(data.error || 'Failed to send message');
+        return;
+      }
+
+      // Success
+      setContactSuccess(true);
+      setContactForm({
+        name: '',
+        email: '',
+        phone: '',
+        service: 'Vedic Astrology',
+        message: '',
+      });
+
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setContactSuccess(false);
+      }, 5000);
+    } catch (error: any) {
+      console.error('Error sending contact form:', error);
+      setContactError('Failed to send your message. Please try again.');
+    } finally {
+      setContactLoading(false);
+    }
+  };
+
   const fetchUserBookings = async () => {
     if (!user) return;
     
@@ -326,7 +425,7 @@ export default function App() {
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-8">
-            {['Home', 'Services', 'About', 'YouTube', 'Contact'].map((item) => (
+            {['Home', 'Services', 'Pricing', 'Shop', 'YouTube', 'Contact'].map((item) => (
               <a 
                 key={item} 
                 href={`#${item.toLowerCase()}`}
@@ -385,22 +484,93 @@ export default function App() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-0 z-40 bg-white pt-24 px-6 md:hidden"
+            className="fixed inset-0 z-40 bg-white pt-24 px-6 md:hidden overflow-y-auto"
           >
-            <div className="flex flex-col gap-6">
-              {['Home', 'Services', 'About', 'YouTube', 'Contact'].map((item) => (
+            <div className="flex flex-col gap-6 pb-6">
+              {/* User Profile Section (when logged in) */}
+              {user && (
+                <div className="bg-gradient-to-r from-spiritual-maroon/20 to-spiritual-gold/20 rounded-xl p-4 border border-spiritual-maroon/20 mb-2">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-full bg-spiritual-gold flex items-center justify-center text-sm font-bold text-spiritual-ink">
+                      {user.photoURL ? <img src={user.photoURL} alt="User" className="w-full h-full rounded-full object-cover" /> : user.email?.[0].toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-bold text-spiritual-ink text-sm">{user.displayName || user.email?.split('@')[0]}</p>
+                      <p className="text-xs text-gray-500">{user.email}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Navigation Links */}
+              {['Home', 'Services', 'Pricing', 'Shop', 'YouTube', 'Contact'].map((item) => (
                 <a 
                   key={item} 
                   href={`#${item.toLowerCase()}`}
                   onClick={() => setIsMenuOpen(false)}
-                  className="text-2xl font-serif border-b border-gray-100 pb-4"
+                  className="text-xl font-serif text-spiritual-ink hover:text-spiritual-gold border-b border-gray-100 pb-4 transition-colors"
                 >
                   {item}
                 </a>
               ))}
-              <button className="bg-spiritual-maroon text-white w-full py-4 rounded-xl text-lg font-medium">
-                Book a Consultation
-              </button>
+
+              {/* Auth & Action Buttons Section */}
+              <div className="space-y-3 mt-4">
+                {user ? (
+                  <>
+                    <button 
+                      onClick={() => {
+                        handleOpenMyBookings();
+                        setIsMenuOpen(false);
+                      }}
+                      className="w-full bg-blue-50 text-blue-600 py-3 rounded-xl text-base font-bold hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Calendar className="w-5 h-5" />
+                      My Bookings
+                    </button>
+                    <button 
+                      onClick={handleBookingClick}
+                      className="w-full bg-spiritual-gold text-spiritual-ink py-3 rounded-xl text-base font-bold hover:bg-spiritual-gold/90 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Sparkles className="w-5 h-5" />
+                      Book Session
+                    </button>
+                    <button 
+                      onClick={() => {
+                        handleLogout();
+                        setIsMenuOpen(false);
+                      }}
+                      className="w-full bg-red-50 text-red-600 py-3 rounded-xl text-base font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <LogOut className="w-5 h-5" />
+                      Logout
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button 
+                      onClick={() => {
+                        setIsLoginModalOpen(true);
+                        setIsMenuOpen(false);
+                      }}
+                      className="w-full bg-spiritual-maroon text-white py-3 rounded-xl text-base font-bold hover:bg-spiritual-maroon/90 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <User className="w-5 h-5" />
+                      Login
+                    </button>
+                    <button 
+                      onClick={() => {
+                        handleBookingClick();
+                        setIsMenuOpen(false);
+                      }}
+                      className="w-full bg-spiritual-gold text-spiritual-ink py-3 rounded-xl text-base font-bold hover:bg-spiritual-gold/90 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Sparkles className="w-5 h-5" />
+                      Book Session
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
@@ -745,36 +915,192 @@ export default function App() {
             </div>
 
             <div className="bg-spiritual-cream p-10 rounded-[2rem] border border-gray-100">
-              <form className="space-y-6">
+              <form onSubmit={handleContactSubmit} className="space-y-6">
+                {contactError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    role="alert"
+                    className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm"
+                  >
+                    {contactError}
+                  </motion.div>
+                )}
+
+                {contactSuccess && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    role="status"
+                    className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm"
+                  >
+                    ✅ Thank you! Your message has been sent successfully. We will contact you soon!
+                  </motion.div>
+                )}
+
                 <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Full Name</label>
-                    <input type="text" className="w-full bg-white border-none rounded-xl p-4 focus:ring-2 focus:ring-spiritual-gold outline-none" placeholder="John Doe" />
+                  <div className="space-y-2 col-span-2 sm:col-span-1">
+                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Full Name *</label>
+                    <input 
+                      type="text" 
+                      name="name"
+                      value={contactForm.name}
+                      onChange={handleContactFormChange}
+                      className="w-full bg-white border-none rounded-xl p-4 focus:ring-2 focus:ring-spiritual-gold outline-none" 
+                      placeholder="John Doe" 
+                      required
+                    />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Email</label>
-                    <input type="email" className="w-full bg-white border-none rounded-xl p-4 focus:ring-2 focus:ring-spiritual-gold outline-none" placeholder="john@example.com" />
+                  <div className="space-y-2 col-span-2 sm:col-span-1">
+                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Email *</label>
+                    <input 
+                      type="email" 
+                      name="email"
+                      value={contactForm.email}
+                      onChange={handleContactFormChange}
+                      className="w-full bg-white border-none rounded-xl p-4 focus:ring-2 focus:ring-spiritual-gold outline-none" 
+                      placeholder="john@example.com" 
+                      required
+                    />
                   </div>
                 </div>
+
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Service Interested In</label>
-                  <select className="w-full bg-white border-none rounded-xl p-4 focus:ring-2 focus:ring-spiritual-gold outline-none appearance-none">
+                  <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Phone Number (10 digits) *</label>
+                  <input 
+                    type="tel" 
+                    name="phone"
+                    value={contactForm.phone}
+                    onChange={handleContactFormChange}
+                    className="w-full bg-white border-none rounded-xl p-4 focus:ring-2 focus:ring-spiritual-gold outline-none" 
+                    placeholder="9158058080" 
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Service Interested In *</label>
+                  <select 
+                    name="service"
+                    value={contactForm.service}
+                    onChange={handleContactFormChange}
+                    className="w-full bg-white border-none rounded-xl p-4 focus:ring-2 focus:ring-spiritual-gold outline-none appearance-none"
+                    required
+                  >
                     <option>Vedic Astrology</option>
-                    <option>Vastu Shastra</option>
+                    <option>Crystal Healing</option>
                     <option>Kundali Analysis</option>
+                    <option>Vastu Shastra</option>
+                    <option>Meditation</option>
                     <option>Spiritual Healing</option>
+                    <option>Past Life Regression</option>
                   </select>
                 </div>
+
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Message</label>
-                  <textarea rows={4} className="w-full bg-white border-none rounded-xl p-4 focus:ring-2 focus:ring-spiritual-gold outline-none" placeholder="Tell us about your requirements..."></textarea>
+                  <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Message (Minimum 10 characters) *</label>
+                  <textarea 
+                    rows={4} 
+                    name="message"
+                    value={contactForm.message}
+                    onChange={handleContactFormChange}
+                    className="w-full bg-white border-none rounded-xl p-4 focus:ring-2 focus:ring-spiritual-gold outline-none" 
+                    placeholder="Tell us about your requirements..."
+                    required
+                  />
                 </div>
-                <button className="w-full bg-spiritual-maroon text-white py-4 rounded-xl font-bold hover:bg-opacity-90 transition-all shadow-lg">
-                  Send Message
+
+                <button 
+                  type="submit"
+                  disabled={contactLoading}
+                  className="w-full bg-spiritual-maroon text-white py-4 rounded-xl font-bold hover:bg-opacity-90 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {contactLoading ? (
+                    <>
+                      <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="w-5 h-5" />
+                      Send Message
+                    </>
+                  )}
                 </button>
+
+                <p className="text-xs text-gray-500 text-center">
+                  We will respond to your inquiry within 24 hours. For faster response, contact us on WhatsApp: +91 9158058080
+                </p>
               </form>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Services Pricing Section */}
+      {user ? (
+        <section id="pricing" className="py-16 bg-white">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl md:text-5xl font-serif font-bold text-spiritual-ink mb-4">Service Pricing</h2>
+              <p className="text-gray-600 max-w-2xl mx-auto">Choose the perfect plan that suits your spiritual journey</p>
+            </div>
+            <ServicePricingDisplay />
+          </div>
+        </section>
+      ) : (
+        <section id="pricing" className="py-16 bg-white">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center">
+              <h2 className="text-4xl md:text-5xl font-serif font-bold text-spiritual-ink mb-4">Service Pricing</h2>
+              <p className="text-gray-600 mb-8">Please log in to view our service pricing</p>
+              <button
+                onClick={() => setIsLoginModalOpen(true)}
+                className="px-8 py-3 bg-spiritual-maroon text-white rounded-lg hover:bg-spiritual-maroon/90 transition"
+              >
+                Login to View Pricing
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Products Catalog Section */}
+      {user ? (
+        <section id="shop" className="py-16 bg-gray-50">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl md:text-5xl font-serif font-bold text-spiritual-ink mb-4">Spiritual Products</h2>
+              <p className="text-gray-600 max-w-2xl mx-auto">Explore our curated collection of spiritual items and tools</p>
+            </div>
+            <ProductsCatalog />
+          </div>
+        </section>
+      ) : (
+        <section id="shop" className="py-16 bg-gray-50">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="text-center">
+              <h2 className="text-4xl md:text-5xl font-serif font-bold text-spiritual-ink mb-4">Spiritual Products</h2>
+              <p className="text-gray-600 mb-8">Please log in to browse our spiritual products</p>
+              <button
+                onClick={() => setIsLoginModalOpen(true)}
+                className="px-8 py-3 bg-spiritual-maroon text-white rounded-lg hover:bg-spiritual-maroon/90 transition"
+              >
+                Login to Shop
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Promo Code Section */}
+      <section id="promo" className="py-16 bg-gradient-to-r from-spiritual-maroon/10 to-spiritual-gold/10">
+        <div className="max-w-4xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-4xl md:text-5xl font-serif font-bold text-spiritual-ink mb-4">Special Offers</h2>
+            <p className="text-gray-600">Use our exclusive promo codes to get amazing discounts</p>
+          </div>
+          <PromoCodeWidget />
         </div>
       </section>
 
@@ -798,8 +1124,10 @@ export default function App() {
               <ul className="space-y-4 text-white/60">
                 <li><a href="#home" className="hover:text-white transition-colors">Home</a></li>
                 <li><a href="#services" className="hover:text-white transition-colors">Services</a></li>
-                <li><a href="#about" className="hover:text-white transition-colors">About</a></li>
+                <li><a href="#pricing" className="hover:text-white transition-colors">Pricing</a></li>
+                <li><a href="#shop" className="hover:text-white transition-colors">Shop</a></li>
                 <li><a href="#youtube" className="hover:text-white transition-colors">YouTube</a></li>
+                <li><a href="#contact" className="hover:text-white transition-colors">Contact</a></li>
               </ul>
             </div>
             <div>
