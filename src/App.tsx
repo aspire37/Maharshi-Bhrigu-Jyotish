@@ -25,7 +25,8 @@ import {
   Lock,
   Calendar,
   MessageSquare,
-  Play
+  Play,
+  ShoppingCart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -121,6 +122,7 @@ export default function App() {
   const [selectedService, setSelectedService] = useState('');
   const [preferredDate, setPreferredDate] = useState('');
   const [additionalNotes, setAdditionalNotes] = useState('');
+  const [bookingUtrNumber, setBookingUtrNumber] = useState('');
   const [userBookings, setUserBookings] = useState<any[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
   
@@ -135,6 +137,16 @@ export default function App() {
   const [contactLoading, setContactLoading] = useState(false);
   const [contactError, setContactError] = useState('');
   const [contactSuccess, setContactSuccess] = useState(false);
+  const [cartItems, setCartItems] = useState<any[]>([]);
+  const [isCartModalOpen, setIsCartModalOpen] = useState(false);
+  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [cartNotification, setCartNotification] = useState<string | null>(null);
+  const [utrNumber, setUtrNumber] = useState('');
+  const [cartPaymentDone, setCartPaymentDone] = useState(false);
+  const [cartPaymentMethod, setCartPaymentMethod] = useState<'gpay' | 'phonepe'>('gpay');
+  const [orderHistory, setOrderHistory] = useState<any[]>([]);
+  const [isOrderHistoryModalOpen, setIsOrderHistoryModalOpen] = useState(false);
+  const [orderHistoryLoading, setOrderHistoryLoading] = useState(false);
   const [featuredVideos, setFeaturedVideos] = useState<any[]>(YOUTUBE_VIDEO_POOL.slice(0, 3).map(v => ({
     ...v,
     thumb: `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`
@@ -147,6 +159,17 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
     });
+
+    // Load cart items from localStorage on mount
+    try {
+      const savedCart = localStorage.getItem('cart_items');
+      if (savedCart) {
+        const parsedCart = JSON.parse(savedCart);
+        setCartItems(parsedCart);
+      }
+    } catch (e) {
+      console.error('Failed to load cart from localStorage:', e);
+    }
 
     // YouTube Video Randomization Logic
     const REFRESH_INTERVAL = 15 * 60 * 1000; // 15 minutes
@@ -240,6 +263,97 @@ export default function App() {
 
   const handleLogout = () => signOut(auth);
 
+  // Persist cart to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('cart_items', JSON.stringify(cartItems));
+    } catch (e) {
+      console.error('Failed to save cart to localStorage:', e);
+    }
+  }, [cartItems]);
+
+  const handleAddToCart = (product: any, quantity: number) => {
+    // Check if product already in cart
+    const existingItem = cartItems.find(item => item.id === product.id);
+    
+    if (existingItem) {
+      // Update quantity
+      setCartItems(cartItems.map(item =>
+        item.id === product.id
+          ? { ...item, quantity: item.quantity + quantity }
+          : item
+      ));
+    } else {
+      // Add new item to cart
+      setCartItems([...cartItems, { ...product, quantity }]);
+    }
+    
+    // Show notification
+    setCartNotification(`${product.name} added to cart!`);
+    setTimeout(() => setCartNotification(null), 3000);
+    
+    // Log to console for verification
+    console.log('Item added to cart:', product.name, 'Quantity:', quantity);
+  };
+
+  const handleUpdateCartQuantity = (productId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      handleRemoveFromCart(productId);
+      return;
+    }
+    
+    setCartItems(cartItems.map(item =>
+      item.id === productId
+        ? { ...item, quantity: newQuantity }
+        : item
+    ));
+  };
+
+  const handleRemoveFromCart = (productId: string) => {
+    const item = cartItems.find(i => i.id === productId);
+    setCartItems(cartItems.filter(item => item.id !== productId));
+    setCartNotification(`${item?.name} removed from cart`);
+    setTimeout(() => setCartNotification(null), 2000);
+  };
+
+  const calculateCartTotal = (): number => {
+    return cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+  };
+
+  const loadOrderHistory = async () => {
+    if (!user) {
+      alert('User not authenticated');
+      return;
+    }
+
+    setOrderHistoryLoading(true);
+    try {
+      const ordersRef = collection(db, 'cart-payments');
+      const q = query(ordersRef, where('userId', '==', user.uid));
+      const querySnapshot = await getDocs(q);
+      
+      const orders = querySnapshot.docs.map(doc => {
+        const data = doc.data() as any;
+        return {
+          id: doc.id,
+          ...data
+        };
+      }).sort((a, b) => {
+        const timeA = (a as any).timestamp?.toDate?.() || new Date((a as any).transactionDate);
+        const timeB = (b as any).timestamp?.toDate?.() || new Date((b as any).transactionDate);
+        return timeB.getTime() - timeA.getTime();
+      });
+
+      setOrderHistory(orders);
+      setIsOrderHistoryModalOpen(true);
+    } catch (error) {
+      console.error('Error loading order history:', error);
+      alert('Failed to load order history. Please try again.');
+    } finally {
+      setOrderHistoryLoading(false);
+    }
+  };
+
   const savePaymentData = async () => {
     if (!user) {
       alert('User not authenticated');
@@ -254,6 +368,7 @@ export default function App() {
         service: selectedService,
         bookingDate: preferredDate,
         additionalNotes: additionalNotes,
+        utrNumber: bookingUtrNumber,
         amount: 999,
         currency: 'INR',
         paymentMethod: paymentMethod === 'gpay' ? 'Google Pay' : 'PhonePe',
@@ -442,6 +557,25 @@ export default function App() {
                   className={`text-xs font-bold px-4 py-2 rounded-full ${scrolled ? 'bg-blue-100 text-blue-600' : 'bg-white/20 text-white'} hover:scale-105 transition-all`}
                 >
                   My Bookings
+                </button>
+                <button 
+                  onClick={() => setIsCartModalOpen(true)}
+                  className={`relative text-xs font-bold px-4 py-2 rounded-full ${scrolled ? 'bg-amber-100 text-amber-600' : 'bg-white/20 text-white'} hover:scale-105 transition-all flex items-center gap-2`}
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                  Cart
+                  {cartItems.length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                      {cartItems.length}
+                    </span>
+                  )}
+                </button>
+                <button 
+                  onClick={loadOrderHistory}
+                  className={`relative text-xs font-bold px-4 py-2 rounded-full ${scrolled ? 'bg-amber-100 text-amber-600' : 'bg-white/20 text-white'} hover:scale-105 transition-all flex items-center gap-2`}
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                  My Orders
                 </button>
                 <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full border border-white/20">
                   <div className="w-6 h-6 rounded-full bg-spiritual-gold flex items-center justify-center text-[10px] font-bold text-spiritual-ink">
@@ -1073,7 +1207,20 @@ export default function App() {
               <h2 className="text-4xl md:text-5xl font-serif font-bold text-spiritual-ink mb-4">Spiritual Products</h2>
               <p className="text-gray-600 max-w-2xl mx-auto">Explore our curated collection of spiritual items and tools</p>
             </div>
-            <ProductsCatalog />
+            <ProductsCatalog onAddToCart={handleAddToCart} />
+            
+            {/* Cart Notification */}
+            {cartNotification && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="fixed bottom-6 right-6 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2"
+              >
+                <span>✓</span>
+                <span>{cartNotification}</span>
+              </motion.div>
+            )}
           </div>
         </section>
       ) : (
@@ -1092,6 +1239,556 @@ export default function App() {
           </div>
         </section>
       )}
+
+      {/* Cart Modal */}
+      <AnimatePresence>
+        {isCartModalOpen && user && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsCartModalOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto z-50"
+            >
+              {/* Header */}
+              <div className="sticky top-0 bg-gradient-to-r from-spiritual-maroon/10 to-spiritual-gold/10 p-6 border-b border-gray-200 flex justify-between items-center">
+                <h2 className="text-2xl font-serif font-bold text-spiritual-ink">Shopping Cart</h2>
+                <button
+                  onClick={() => setIsCartModalOpen(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Cart Items */}
+              <div className="p-6">
+                {cartItems.length === 0 ? (
+                  <div className="text-center py-12">
+                    <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 text-lg">Your cart is empty</p>
+                    <button
+                      onClick={() => setIsCartModalOpen(false)}
+                      className="mt-6 px-6 py-2 bg-spiritual-maroon text-white rounded-lg hover:bg-spiritual-maroon/90 transition"
+                    >
+                      Continue Shopping
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Items List */}
+                    <div className="space-y-4 mb-6">
+                      {cartItems.map((item) => (
+                        <motion.div
+                          key={item.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="bg-gray-50 rounded-xl p-4 border border-gray-200"
+                        >
+                          <div className="flex gap-4">
+                            {/* Product Image */}
+                            <img
+                              src={item.images?.[0] || 'https://via.placeholder.com/100'}
+                              alt={item.name}
+                              className="w-24 h-24 rounded-lg object-cover"
+                            />
+                            
+                            {/* Product Info */}
+                            <div className="flex-1">
+                              <h3 className="font-bold text-gray-900">{item.name}</h3>
+                              <p className="text-sm text-gray-600 mb-3">{item.description}</p>
+                              
+                              {/* Price and Quantity */}
+                              <div className="flex justify-between items-center">
+                                <span className="text-lg font-bold text-spiritual-maroon">
+                                  ₹{item.price}
+                                </span>
+                                
+                                {/* Quantity Controls */}
+                                <div className="flex items-center gap-2 bg-white border border-gray-300 rounded-lg p-1">
+                                  <button
+                                    onClick={() => handleUpdateCartQuantity(item.id, item.quantity - 1)}
+                                    className="px-3 py-1 text-gray-600 hover:text-gray-900 transition"
+                                  >
+                                    −
+                                  </button>
+                                  <span className="px-3 font-bold text-gray-900">{item.quantity}</span>
+                                  <button
+                                    onClick={() => handleUpdateCartQuantity(item.id, item.quantity + 1)}
+                                    className="px-3 py-1 text-gray-600 hover:text-gray-900 transition"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Remove Button */}
+                            <button
+                              onClick={() => handleRemoveFromCart(item.id)}
+                              className="text-red-500 hover:text-red-700 transition"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+                          
+                          {/* Item Total */}
+                          <div className="mt-3 pt-3 border-t border-gray-200 text-right">
+                            <p className="text-sm text-gray-600">
+                              Subtotal: <span className="font-bold text-gray-900">₹{(item.price * item.quantity).toLocaleString('en-IN')}</span>
+                            </p>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+
+                    {/* Cart Summary */}
+                    <div className="bg-gradient-to-r from-spiritual-maroon/10 to-spiritual-gold/10 rounded-xl p-6 border-2 border-spiritual-gold/30 mb-6">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-gray-600">Subtotal:</span>
+                        <span className="font-bold">₹{calculateCartTotal().toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-gray-600">Tax (0%):</span>
+                        <span className="font-bold">₹0</span>
+                      </div>
+                      <div className="border-t border-gray-300 pt-3 flex justify-between items-center">
+                        <span className="text-lg font-bold text-spiritual-ink">Total:</span>
+                        <span className="text-2xl font-bold text-spiritual-maroon">₹{calculateCartTotal().toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setIsCartModalOpen(false)}
+                        className="flex-1 px-6 py-3 bg-gray-100 text-gray-900 rounded-lg font-bold hover:bg-gray-200 transition"
+                      >
+                        Continue Shopping
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsCartModalOpen(false);
+                          setIsCheckoutModalOpen(true);
+                        }}
+                        className="flex-1 px-6 py-3 bg-spiritual-maroon text-white rounded-lg font-bold hover:bg-spiritual-maroon/90 transition flex items-center justify-center gap-2"
+                      >
+                        <ShoppingCart className="w-5 h-5" />
+                        Checkout
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Checkout Modal */}
+      <AnimatePresence>
+        {isCheckoutModalOpen && user && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setIsCheckoutModalOpen(false);
+                setCartPaymentDone(false);
+                setUtrNumber('');
+                setCartPaymentMethod('gpay');
+              }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative bg-white w-full max-w-4xl rounded-[2.5rem] overflow-hidden shadow-2xl max-h-[90vh] flex flex-col"
+            >
+              {!cartPaymentDone ? (
+                <>
+                  <div className="spiritual-gradient px-10 py-6 text-white flex justify-between items-center sticky top-0 z-10">
+                    <div className="flex items-center gap-4 flex-1">
+                      <button 
+                        onClick={() => {
+                          setIsCheckoutModalOpen(false);
+                          setUtrNumber('');
+                          setCartPaymentDone(false);
+                        }}
+                        className="bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors"
+                      >
+                        <ChevronRight className="w-6 h-6 rotate-180" />
+                      </button>
+                      <div>
+                        <h2 className="text-3xl font-serif mb-1">Complete Your Purchase</h2>
+                        <p className="text-white/60 text-sm">Total Amount: <span className="text-spiritual-gold font-bold text-lg">₹{calculateCartTotal().toLocaleString('en-IN')}</span></p>
+                      </div>
+                    </div>
+                    <button onClick={() => {
+                      setIsCheckoutModalOpen(false);
+                      setCartPaymentDone(false);
+                      setUtrNumber('');
+                    }} className="bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors">
+                      <X className="w-6 h-6" />
+                    </button>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto">
+                    <div className="p-10 grid lg:grid-cols-3 gap-10">
+                      {/* Left Side - Order Items (scrollable) */}
+                      <div className="lg:col-span-2 space-y-6">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Order Items</label>
+                          <div className="bg-gray-50 rounded-2xl p-4 space-y-2 max-h-96 overflow-y-auto">
+                            {cartItems.map((item) => (
+                              <div key={item.id} className="flex justify-between items-start pb-4 border-b border-gray-200 last:border-0 last:pb-0">
+                                <div className="flex-1 pr-4">
+                                  <p className="font-semibold text-sm text-gray-900">{item.name}</p>
+                                  <p className="text-xs text-gray-500 mt-1">Qty: {item.quantity}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-xs text-gray-500 mb-1">₹{item.price.toLocaleString('en-IN')} each</p>
+                                  <p className="font-bold text-spiritual-maroon">₹{(item.price * item.quantity).toLocaleString('en-IN')}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold uppercase tracking-widest text-gray-400">UTR Number for Verification</label>
+                          <div className="flex gap-3 items-end">
+                            <div className="flex-1">
+                              <input 
+                                type="text" 
+                                value={utrNumber}
+                                onChange={(e) => setUtrNumber(e.target.value.toUpperCase())}
+                                placeholder="Enter UTR (e.g., 123456789012)"
+                                className="w-full bg-gray-50 border-2 border-gray-200 rounded-2xl p-3 focus:border-spiritual-gold focus:ring-2 focus:ring-spiritual-gold outline-none text-sm"
+                              />
+                            </div>
+                            <button 
+                              onClick={async () => {
+                                if (!utrNumber.trim()) {
+                                  alert('Please enter UTR number for verification');
+                                  return;
+                                }
+                                
+                                // Save payment data
+                                try {
+                                  const paymentData = {
+                                    userId: user.uid,
+                                    userEmail: user.email,
+                                    userName: user.displayName || 'N/A',
+                                    items: cartItems,
+                                    utrNumber: utrNumber,
+                                    amount: calculateCartTotal(),
+                                    currency: 'INR',
+                                    paymentMethod: cartPaymentMethod === 'gpay' ? 'Google Pay' : 'PhonePe',
+                                    paymentStatus: 'Completed',
+                                    transactionDate: new Date().toISOString(),
+                                    timestamp: new Date()
+                                  };
+
+                                  const docRef = await addDoc(collection(db, 'cart-payments'), paymentData);
+                                  console.log('Cart payment data saved successfully:', docRef.id);
+                                  
+                                  setCartPaymentDone(true);
+                                  setCartItems([]);
+                                  setUtrNumber('');
+                                } catch (error) {
+                                  console.error('Error saving payment data:', error);
+                                  alert('Failed to process payment. Please try again.');
+                                }
+                              }}
+                              disabled={!utrNumber.trim()}
+                              className={`px-6 py-3 rounded-2xl font-bold transition-all shadow-lg text-sm whitespace-nowrap ${
+                                utrNumber.trim()
+                                  ? 'bg-spiritual-maroon text-white hover:bg-opacity-90'
+                                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              }`}
+                            >
+                              Complete Payment
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-500">UTR number is required to verify your payment</p>
+                        </div>
+                      </div>
+                      
+                      {/* Right Side - Payment Card (sticky on scroll) */}
+                      <div className="lg:col-span-1">
+                        <div className="bg-spiritual-cream p-8 rounded-3xl border border-gray-100 sticky top-0">
+                          <div className="space-y-6">
+                            <div>
+                              <h4 className="font-bold mb-6 flex items-center gap-2 text-spiritual-ink">
+                                <Sparkles className="w-5 h-5 text-spiritual-gold" /> Payment Details
+                              </h4>
+                              
+                              {/* QR Code */}
+                              <div className="mb-6 p-4 bg-white rounded-2xl border-2 border-dashed border-spiritual-gold/50 flex items-center justify-center">
+                                <div className="text-center">
+                                  <img 
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=maharshi-bhrigu-${calculateCartTotal()}-INR`}
+                                    alt="Payment QR Code"
+                                    className="w-28 h-28 mx-auto mb-2"
+                                  />
+                                  <p className="text-xs text-gray-600 font-semibold">Scan to Pay ₹{calculateCartTotal().toLocaleString('en-IN')}</p>
+                                </div>
+                              </div>
+
+                              {/* Payment Method Selection */}
+                              <div className="space-y-3 mb-6">
+                                <label className="text-xs font-bold uppercase tracking-widest text-gray-600 block">Payment Method</label>
+                                <div className="space-y-2">
+                                  <label className="flex items-center gap-3 p-2 bg-white rounded-lg border-2 border-gray-200 cursor-pointer hover:border-spiritual-gold transition-colors">
+                                    <input 
+                                      type="radio" 
+                                      name="cart-payment" 
+                                      value="gpay"
+                                      checked={cartPaymentMethod === 'gpay'}
+                                      onChange={(e) => setCartPaymentMethod(e.target.value as 'gpay' | 'phonepe')}
+                                      className="w-4 h-4 accent-spiritual-gold cursor-pointer"
+                                    />
+                                    <div className="flex-1">
+                                      <div className="font-bold text-xs text-spiritual-ink">Google Pay</div>
+                                    </div>
+                                  </label>
+                                  <label className="flex items-center gap-3 p-2 bg-white rounded-lg border-2 border-gray-200 cursor-pointer hover:border-spiritual-gold transition-colors">
+                                    <input 
+                                      type="radio" 
+                                      name="cart-payment" 
+                                      value="phonepe"
+                                      checked={cartPaymentMethod === 'phonepe'}
+                                      onChange={(e) => setCartPaymentMethod(e.target.value as 'gpay' | 'phonepe')}
+                                      className="w-4 h-4 accent-spiritual-gold cursor-pointer"
+                                    />
+                                    <div className="flex-1">
+                                      <div className="font-bold text-xs text-spiritual-ink">PhonePe</div>
+                                    </div>
+                                  </label>
+                                </div>
+                              </div>
+
+                              {/* Price Summary */}
+                              <div className="bg-white p-4 rounded-2xl border border-gray-200">
+                                <div className="space-y-2 text-sm mb-3">
+                                  {cartItems.map((item) => (
+                                    <div key={item.id} className="flex justify-between">
+                                      <span className="text-gray-600">{item.name} x{item.quantity}</span>
+                                      <span className="font-semibold text-gray-900">₹{(item.price * item.quantity).toLocaleString('en-IN')}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="border-t border-gray-100 pt-3">
+                                  <div className="flex justify-between mb-2">
+                                    <span className="text-gray-600 text-sm">Subtotal:</span>
+                                    <span className="font-bold text-gray-900">₹{calculateCartTotal().toLocaleString('en-IN')}</span>
+                                  </div>
+                                  <div className="flex justify-between font-bold">
+                                    <span className="text-spiritual-ink">Total:</span>
+                                    <span className="text-lg text-spiritual-gold">₹{calculateCartTotal().toLocaleString('en-IN')}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                // Payment Done Screen
+                <div className="p-10 flex flex-col items-center justify-center min-h-[500px]">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", delay: 0.3 }}
+                    className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6"
+                  >
+                    <motion.div
+                      initial={{ rotate: 0 }}
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, delay: 0.3 }}
+                      className="w-12 h-12 text-green-600"
+                    >
+                      <svg className="w-full h-full" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                      </svg>
+                    </motion.div>
+                  </motion.div>
+
+                  <h2 className="text-3xl font-serif text-spiritual-ink mb-2 text-center">Payment Successful!</h2>
+                  <p className="text-gray-600 text-center mb-8">Your order has been confirmed and your payment has been verified</p>
+
+                  <div className="bg-spiritual-cream p-8 rounded-3xl w-full mb-8 border border-gray-200">
+                    <div className="space-y-4 mb-6">
+                      <div className="flex justify-between items-center pb-4 border-b border-gray-200">
+                        <span className="text-gray-600">UTR Number:</span>
+                        <span className="font-bold text-spiritual-ink">{utrNumber}</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-4 border-b border-gray-200">
+                        <span className="text-gray-600">Payment Method:</span>
+                        <span className="font-bold text-spiritual-ink">{cartPaymentMethod === 'gpay' ? 'Google Pay' : 'PhonePe'}</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-4 border-b border-gray-200">
+                        <span className="text-gray-600">Total Items:</span>
+                        <span className="font-bold text-spiritual-ink">{cartItems.length}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Amount Paid:</span>
+                        <span className="font-bold text-spiritual-gold text-lg">₹{calculateCartTotal().toLocaleString('en-IN')}</span>
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-gray-600 bg-amber-50 p-4 rounded-2xl border border-amber-200">
+                      📧 A confirmation email with your order details and UTR number has been sent to your registered email address.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setIsCheckoutModalOpen(false);
+                      setCartPaymentDone(false);
+                      setUtrNumber('');
+                      setCartPaymentMethod('gpay');
+                    }}
+                    className="w-full bg-spiritual-maroon text-white py-4 rounded-2xl font-bold hover:bg-opacity-90 transition-all shadow-lg"
+                  >
+                    Close & Continue Shopping
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Order History Modal */}
+      <AnimatePresence>
+        {isOrderHistoryModalOpen && user && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsOrderHistoryModalOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative bg-white w-full max-w-3xl rounded-[2.5rem] overflow-hidden shadow-2xl max-h-[85vh] flex flex-col"
+            >
+              <div className="spiritual-gradient px-10 py-6 text-white flex justify-between items-center sticky top-0 z-10">
+                <div className="flex items-center gap-4">
+                  <div>
+                    <h2 className="text-3xl font-serif mb-1">Order History</h2>
+                    <p className="text-white/60 text-sm">View your past purchases and transactions</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsOrderHistoryModalOpen(false)} className="bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-10">
+                {orderHistoryLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="text-center">
+                      <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-spiritual-gold"></div>
+                      <p className="mt-4 text-gray-600">Loading your order history...</p>
+                    </div>
+                  </div>
+                ) : orderHistory.length === 0 ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="text-center">
+                      <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-xl font-semibold text-gray-700 mb-2">No Orders Yet</h3>
+                      <p className="text-gray-600">You haven't made any purchases yet.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {orderHistory.map((order) => {
+                      const orderDate = order.timestamp?.toDate?.() || new Date(order.transactionDate);
+                      return (
+                        <div key={order.id} className="bg-spiritual-cream p-6 rounded-2xl border border-gray-200 hover:border-spiritual-gold transition-colors">
+                          <div className="grid md:grid-cols-2 gap-6 mb-4">
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Order ID</p>
+                              <p className="font-mono text-sm text-gray-900 break-all">{order.id}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Order Date</p>
+                              <p className="font-semibold text-gray-900">{orderDate.toLocaleDateString('en-IN', { 
+                                year: 'numeric', 
+                                month: 'long', 
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}</p>
+                            </div>
+                          </div>
+
+                          <div className="mb-4">
+                            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">Items</p>
+                            <div className="space-y-2">
+                              {order.items?.map((item: any, idx: number) => (
+                                <div key={idx} className="flex justify-between items-start pb-2 border-b border-gray-200 last:border-0">
+                                  <div>
+                                    <p className="font-semibold text-sm text-gray-900">{item.name}</p>
+                                    <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
+                                  </div>
+                                  <p className="font-bold text-spiritual-maroon">₹{(item.price * item.quantity).toLocaleString('en-IN')}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="grid md:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Amount</p>
+                              <p className="text-lg font-bold text-spiritual-gold">₹{order.amount?.toLocaleString('en-IN')}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">UTR Number</p>
+                              <p className="font-mono text-sm text-gray-900">{order.utrNumber}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1">Payment Method</p>
+                              <p className="font-semibold text-gray-900">{order.paymentMethod}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-gray-200 px-10 py-6 flex gap-4">
+                <button
+                  onClick={() => setIsOrderHistoryModalOpen(false)}
+                  className="flex-1 px-6 py-3 bg-gray-100 text-gray-900 rounded-lg font-bold hover:bg-gray-200 transition"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Promo Code Section */}
       <section id="promo" className="py-16 bg-gradient-to-r from-spiritual-maroon/10 to-spiritual-gold/10">
@@ -1252,6 +1949,7 @@ export default function App() {
                 setSelectedService('');
                 setPreferredDate('');
                 setAdditionalNotes('');
+                setBookingUtrNumber('');
               }}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             />
@@ -1271,6 +1969,7 @@ export default function App() {
                     <button onClick={() => {
                       setIsBookingModalOpen(false);
                       setPaymentDone(false);
+                      setBookingUtrNumber('');
                     }} className="bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors">
                       <X className="w-6 h-6" />
                     </button>
@@ -1310,6 +2009,17 @@ export default function App() {
                           className="w-full bg-gray-50 border-none rounded-2xl p-4 focus:ring-2 focus:ring-spiritual-gold outline-none text-sm" 
                           placeholder="Any specific questions?"
                         ></textarea>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase tracking-widest text-gray-400">UTR Number for Verification</label>
+                        <input 
+                          type="text" 
+                          value={bookingUtrNumber}
+                          onChange={(e) => setBookingUtrNumber(e.target.value.toUpperCase())}
+                          placeholder="Enter UTR (e.g., 123456789012)"
+                          className="w-full bg-gray-50 border-2 border-gray-200 rounded-2xl p-4 focus:border-spiritual-gold focus:ring-2 focus:ring-spiritual-gold outline-none text-sm"
+                        />
+                        <p className="text-xs text-gray-500">UTR number is required to authorize your booking</p>
                       </div>
                     </div>
                     
@@ -1386,6 +2096,11 @@ export default function App() {
                               return;
                             }
                             
+                            if (!bookingUtrNumber.trim()) {
+                              alert('Please enter UTR number for verification');
+                              return;
+                            }
+                            
                             const isDuplicate = await checkDuplicateBooking(selectedService, preferredDate);
                             if (isDuplicate) {
                               alert('❌ You have already booked a session for this service on this date. Please check your "My Bookings" or select a different date.');
@@ -1395,7 +2110,12 @@ export default function App() {
                             await savePaymentData();
                             setPaymentDone(true);
                           }}
-                          className="w-full bg-spiritual-maroon text-white py-4 rounded-2xl font-bold hover:bg-opacity-90 transition-all shadow-lg"
+                          disabled={!bookingUtrNumber.trim()}
+                          className={`w-full py-4 rounded-2xl font-bold transition-all shadow-lg ${
+                            bookingUtrNumber.trim()
+                              ? 'bg-spiritual-maroon text-white hover:bg-opacity-90'
+                              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          }`}
                         >
                           Proceed to Pay ₹999
                         </button>
@@ -1441,6 +2161,10 @@ export default function App() {
                         <span className="font-bold text-spiritual-ink">{preferredDate}</span>
                       </div>
                       <div className="flex justify-between items-center pb-4 border-b border-gray-200">
+                        <span className="text-gray-600">UTR Number:</span>
+                        <span className="font-bold text-spiritual-ink">{bookingUtrNumber}</span>
+                      </div>
+                      <div className="flex justify-between items-center pb-4 border-b border-gray-200">
                         <span className="text-gray-600">Payment Method:</span>
                         <span className="font-bold text-spiritual-ink">{paymentMethod === 'gpay' ? 'Google Pay' : 'PhonePe'}</span>
                       </div>
@@ -1482,6 +2206,7 @@ export default function App() {
                         setSelectedService('');
                         setPreferredDate('');
                         setAdditionalNotes('');
+                        setBookingUtrNumber('');
                       }}
                       className="flex-1 bg-spiritual-maroon text-white py-4 rounded-2xl font-bold hover:bg-opacity-90 transition-all shadow-lg"
                     >

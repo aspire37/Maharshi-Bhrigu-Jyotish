@@ -65,35 +65,11 @@ export const ServicePricingDisplay: React.FC = () => {
                   <ul className="space-y-2">
                     <li className="flex items-center gap-2 text-sm text-gray-600">
                       <Check className="w-4 h-4 text-spiritual-gold" />
-                      30-minute consultation
+                      30-40 minute consultation
                     </li>
                     <li className="flex items-center gap-2 text-sm text-gray-600">
                       <Check className="w-4 h-4 text-spiritual-gold" />
                       Basic analysis
-                    </li>
-                  </ul>
-                </div>
-
-                {/* Standard Tier */}
-                <div className="pb-6 border-b border-gray-100">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="font-semibold text-gray-700">Standard Session</span>
-                    <span className="text-2xl font-bold text-spiritual-gold">
-                      ₹{service.standard}
-                    </span>
-                  </div>
-                  <ul className="space-y-2">
-                    <li className="flex items-center gap-2 text-sm text-gray-600">
-                      <Check className="w-4 h-4 text-spiritual-gold" />
-                      60-minute consultation
-                    </li>
-                    <li className="flex items-center gap-2 text-sm text-gray-600">
-                      <Check className="w-4 h-4 text-spiritual-gold" />
-                      Detailed analysis
-                    </li>
-                    <li className="flex items-center gap-2 text-sm text-gray-600">
-                      <Check className="w-4 h-4 text-spiritual-gold" />
-                      Written report
                     </li>
                   </ul>
                 </div>
@@ -109,7 +85,7 @@ export const ServicePricingDisplay: React.FC = () => {
                   <ul className="space-y-2">
                     <li className="flex items-center gap-2 text-sm text-gray-600">
                       <Check className="w-4 h-4 text-spiritual-gold" />
-                      90-minute consultation
+                      60-90 minute consultation
                     </li>
                     <li className="flex items-center gap-2 text-sm text-gray-600">
                       <Check className="w-4 h-4 text-spiritual-gold" />
@@ -159,22 +135,17 @@ export const ServicePricingDisplay: React.FC = () => {
                 <tr className="bg-gray-50 border-b border-gray-200">
                   <th className="px-6 py-4 text-left font-semibold text-gray-700">Feature</th>
                   <th className="px-6 py-4 text-center font-semibold text-gray-700">Basic</th>
-                  <th className="px-6 py-4 text-center font-semibold text-gray-700">Standard</th>
                   <th className="px-6 py-4 text-center font-semibold text-gray-700">Premium</th>
                 </tr>
               </thead>
               <tbody>
                 <tr className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="px-6 py-4 font-semibold text-gray-700">Duration</td>
-                  <td className="px-6 py-4 text-center text-gray-600">30 min</td>
-                  <td className="px-6 py-4 text-center text-gray-600">60 min</td>
-                  <td className="px-6 py-4 text-center text-gray-600">90 min</td>
+                  <td className="px-6 py-4 text-center text-gray-600">30-40 min</td>
+                  <td className="px-6 py-4 text-center text-gray-600">60-90 min</td>
                 </tr>
                 <tr className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="px-6 py-4 font-semibold text-gray-700">Personalized Analysis</td>
-                  <td className="px-6 py-4 text-center">
-                    <Check className="w-5 h-5 text-spiritual-gold mx-auto" />
-                  </td>
                   <td className="px-6 py-4 text-center">
                     <Check className="w-5 h-5 text-spiritual-gold mx-auto" />
                   </td>
@@ -188,13 +159,9 @@ export const ServicePricingDisplay: React.FC = () => {
                   <td className="px-6 py-4 text-center">
                     <Check className="w-5 h-5 text-spiritual-gold mx-auto" />
                   </td>
-                  <td className="px-6 py-4 text-center">
-                    <Check className="w-5 h-5 text-spiritual-gold mx-auto" />
-                  </td>
                 </tr>
                 <tr className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="px-6 py-4 font-semibold text-gray-700">Remedies & Solutions</td>
-                  <td className="px-6 py-4 text-center text-gray-400">—</td>
                   <td className="px-6 py-4 text-center text-gray-400">—</td>
                   <td className="px-6 py-4 text-center">
                     <Check className="w-5 h-5 text-spiritual-gold mx-auto" />
@@ -202,7 +169,6 @@ export const ServicePricingDisplay: React.FC = () => {
                 </tr>
                 <tr className="hover:bg-gray-50">
                   <td className="px-6 py-4 font-semibold text-gray-700">Follow-up Support</td>
-                  <td className="px-6 py-4 text-center text-gray-400">—</td>
                   <td className="px-6 py-4 text-center text-gray-400">—</td>
                   <td className="px-6 py-4 text-center">
                     <Check className="w-5 h-5 text-spiritual-gold mx-auto" />

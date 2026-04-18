@@ -225,7 +225,7 @@ export const MyBookingsModal: React.FC<MyBookingsModalProps> = ({
                           </div>
                         </div>
 
-                        {booking.paymentStatus !== 'Cancelled' && (
+                        {booking.paymentStatus === 'Completed' && (
                           <div className="flex gap-3 pt-4 border-t border-gray-200">
                             <button
                               onClick={() => handleReschedule(booking)}

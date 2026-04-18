@@ -135,7 +135,6 @@ export const SUCCESS_MESSAGES = {
 export interface ServicePricing {
   serviceName: string;
   basic: number;
-  standard: number;
   premium: number;
   description: string;
 }
@@ -144,49 +143,42 @@ export const SERVICE_PRICING: ServicePricing[] = [
   {
     serviceName: 'Vedic Astrology',
     basic: 999,
-    standard: 1999,
-    premium: 3999,
+    premium: 3300,
     description: 'Traditional Vedic principles for accurate life predictions',
   },
   {
     serviceName: 'Kundali Analysis',
     basic: 1499,
-    standard: 2499,
     premium: 4999,
     description: 'In-depth analysis of the 12 houses of your birth chart',
   },
   {
     serviceName: 'Vastu Shastra',
     basic: 1999,
-    standard: 3499,
     premium: 5999,
     description: 'Harmonizing your home and office energy for prosperity',
   },
   {
     serviceName: 'Crystal Healing',
     basic: 999,
-    standard: 1999,
     premium: 3499,
     description: 'Using sacred crystals to balance energy and well-being',
   },
   {
     serviceName: 'Spiritual Healing',
     basic: 1499,
-    standard: 2999,
     premium: 4999,
     description: 'Energy healing and spiritual remedies for life challenges',
   },
   {
     serviceName: 'Past Life Regression',
-    basic: 1999,
-    standard: 3999,
-    premium: 6999,
+    basic: 5500,
+    premium: 14999,
     description: 'Exploring past life connections and karmic patterns',
   },
   {
     serviceName: 'Meditation',
     basic: 499,
-    standard: 999,
     premium: 1999,
     description: 'Techniques for mental peace and energy balancing',
   },
